@@ -5,9 +5,10 @@ use rand::prelude::SliceRandom;
 pub type Row = u8;
 pub type Move = (usize, Row);
 
+#[derive(Debug)]
 pub struct NimGame {
-    rows: Vec<Row>,
-    initial: Vec<Row>,
+    pub rows: Vec<Row>,
+    pub initial: Vec<Row>,
 }
 
 impl NimGame {
