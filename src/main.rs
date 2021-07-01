@@ -1,8 +1,18 @@
 mod nim;
 
-use std::{fmt::Display, io::{stdout, Write}, time::{Duration, Instant}};
+use std::{
+    fmt::Display,
+    io::{stdout, Write},
+    time::{Duration, Instant},
+};
 
-use crossterm::{cursor::{self, MoveRight, MoveTo, MoveToNextLine}, event::{self, Event, KeyCode, KeyEvent, }, execute, queue, style::{ Color, Print, PrintStyledContent, Stylize}, terminal::{self, ClearType, EnterAlternateScreen, LeaveAlternateScreen}};
+use crossterm::{
+    cursor::{self, MoveRight, MoveTo, MoveToNextLine},
+    event::{self, Event, KeyCode, KeyEvent},
+    execute, queue,
+    style::{Color, Print, PrintStyledContent, Stylize},
+    terminal::{self, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use nim::{Move, NimGame};
 
 enum PlayerType {
@@ -24,7 +34,7 @@ struct GameDisplay {
     width: u16,
     last_move: Option<Move>,
     highlighted_move: Move,
-    blink_on: bool
+    blink_on: bool,
 }
 
 impl GameDisplay {
@@ -38,11 +48,12 @@ impl GameDisplay {
         {
             let left_padding = self.width - num_initial_items as u16;
 
-            let highlight_current_move = if i == self.highlighted_move.0 && highlighted && self.blink_on {
-                self.highlighted_move.1
-            } else {
-                0
-            };
+            let highlight_current_move =
+                if i == self.highlighted_move.0 && highlighted && self.blink_on {
+                    self.highlighted_move.1
+                } else {
+                    0
+                };
 
             let unmoved_row_string: String =
                 "◉ ".repeat((num_items - highlight_current_move).into());
@@ -180,7 +191,7 @@ impl GameDisplay {
             width: largest_row.into(),
             last_move: None,
             highlighted_move: (0, 1),
-            blink_on: true
+            blink_on: true,
         }
     }
 }
