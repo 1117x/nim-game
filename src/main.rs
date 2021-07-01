@@ -1,19 +1,9 @@
 mod nim;
 
-use std::{
-    fmt::Display,
-    io::{stdout, Write},
-    time::Duration,
-};
+use std::{fmt::Display, io::{stdout, Write}, time::{Duration, Instant}};
 
-use crossterm::{
-    cursor::{self, MoveDown, MoveRight, MoveTo, MoveToNextLine},
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
-    execute, queue,
-    style::{self, Color, Print, PrintStyledContent, Stylize},
-    terminal::{self, ClearType, EnterAlternateScreen},
-};
-use nim::{Move, NimGame, Row};
+use crossterm::{cursor::{self, MoveRight, MoveTo, MoveToNextLine}, event::{self, Event, KeyCode, KeyEvent, }, execute, queue, style::{ Color, Print, PrintStyledContent, Stylize}, terminal::{self, ClearType, EnterAlternateScreen, LeaveAlternateScreen}};
+use nim::{Move, NimGame};
 
 enum PlayerType {
     Human(String),
@@ -34,6 +24,7 @@ struct GameDisplay {
     width: u16,
     last_move: Option<Move>,
     highlighted_move: Move,
+    blink_on: bool
 }
 
 impl GameDisplay {
@@ -47,7 +38,7 @@ impl GameDisplay {
         {
             let left_padding = self.width - num_initial_items as u16;
 
-            let highlight_current_move = if i == self.highlighted_move.0 && highlighted {
+            let highlight_current_move = if i == self.highlighted_move.0 && highlighted && self.blink_on {
                 self.highlighted_move.1
             } else {
                 0
@@ -97,6 +88,9 @@ impl GameDisplay {
         self.highlighted_move.1 = 1;
 
         self.display(game, true);
+
+        let mut last_update = Instant::now();
+
         loop {
             if event::poll(Duration::from_millis(100)).unwrap() {
                 if let Event::Key(KeyEvent { code: key, .. }) = event::read().unwrap() {
@@ -121,9 +115,16 @@ impl GameDisplay {
                         KeyCode::Enter => return Some(self.highlighted_move),
                         _ => false,
                     } {
+                        self.blink_on = true;
                         self.display(game, true);
                     }
                 };
+            }
+
+            if last_update.elapsed().as_millis() >= 500 {
+                self.blink_on = !self.blink_on;
+                self.display(game, true);
+                last_update = Instant::now();
             }
         }
     }
@@ -179,6 +180,7 @@ impl GameDisplay {
             width: largest_row.into(),
             last_move: None,
             highlighted_move: (0, 1),
+            blink_on: true
         }
     }
 }
@@ -231,4 +233,9 @@ fn main() {
     } else {
         println!("Aborting.");
     }
+
+    event::read().unwrap();
+
+    execute!(stdout(), LeaveAlternateScreen, cursor::Show).unwrap();
+    terminal::disable_raw_mode().unwrap();
 }
