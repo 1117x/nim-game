@@ -107,19 +107,19 @@ impl GameDisplay {
                 if let Event::Key(KeyEvent { code: key, .. }) = event::read().unwrap() {
                     if match key {
                         KeyCode::Esc => return None,
-                        KeyCode::Left => {
+                        KeyCode::Left | KeyCode::Char('h') => {
                             self.move_selection_left(game);
                             true
                         }
-                        KeyCode::Right => {
+                        KeyCode::Right | KeyCode::Char('l') => {
                             self.move_selection_right();
                             true
                         }
-                        KeyCode::Up => {
+                        KeyCode::Up | KeyCode::Char('k') => {
                             self.move_selection_up(game);
                             true
                         }
-                        KeyCode::Down => {
+                        KeyCode::Down | KeyCode::Char('j') => {
                             self.move_selection_down(game);
                             true
                         }
@@ -127,6 +127,7 @@ impl GameDisplay {
                         _ => false,
                     } {
                         self.blink_on = true;
+                        last_update = Instant::now();
                         self.display(game, true);
                     }
                 };
