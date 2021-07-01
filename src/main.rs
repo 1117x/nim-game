@@ -8,7 +8,7 @@ use std::{
 
 use crossterm::{
     cursor::{self, MoveDown, MoveRight, MoveTo, MoveToNextLine},
-    event::{self, KeyCode, KeyEvent, KeyModifiers},
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute, queue,
     style::{self, Color, Print, PrintStyledContent, Stylize},
     terminal::{self, ClearType, EnterAlternateScreen},
@@ -18,15 +18,6 @@ use nim::{Move, NimGame, Row};
 enum PlayerType {
     Human(String),
     Computer,
-}
-
-impl PlayerType {
-    fn get_move(&self, game: &NimGame) -> Option<Move> {
-        match self {
-            PlayerType::Human(_) => todo!(),
-            PlayerType::Computer => Some(game.auto_move()),
-        }
-    }
 }
 
 impl Display for PlayerType {
@@ -40,28 +31,23 @@ impl Display for PlayerType {
 
 #[derive(Debug)]
 struct GameDisplay {
-    game: NimGame,
     width: u16,
     last_move: Option<Move>,
     highlighted_move: Move,
 }
 
 impl GameDisplay {
-    fn display(&self) {
+    fn display(&self, game: &NimGame, highlighted: bool) {
         let mut stdout = stdout();
         queue!(stdout, terminal::Clear(ClearType::All)).unwrap();
         queue!(stdout, MoveTo(0, 0)).unwrap();
 
-        for (i, (&num_items, &num_initial_items)) in self
-            .game
-            .rows
-            .iter()
-            .zip(self.game.initial.iter())
-            .enumerate()
+        for (i, (&num_items, &num_initial_items)) in
+            game.rows.iter().zip(game.initial.iter()).enumerate()
         {
             let left_padding = self.width - num_initial_items as u16;
 
-            let highlight_current_move = if i == self.highlighted_move.0 {
+            let highlight_current_move = if i == self.highlighted_move.0 && highlighted {
                 self.highlighted_move.1
             } else {
                 0
@@ -101,84 +87,117 @@ impl GameDisplay {
         }
     }
 
-    fn update_loop(mut self) {
-        self.display();
+    fn get_user_move(&mut self, game: &NimGame) -> Option<Move> {
+        self.highlighted_move.0 = game
+            .rows
+            .iter()
+            .enumerate()
+            .find_map(|(i, &x)| if x > 0 { Some(i) } else { None })
+            .unwrap();
+        self.highlighted_move.1 = 1;
+
+        self.display(game, true);
         loop {
             if event::poll(Duration::from_millis(100)).unwrap() {
-                let changed = match event::read().unwrap() {
-                    event::Event::Key(KeyEvent {
-                        code: KeyCode::Esc,
-                        modifiers: KeyModifiers::NONE,
-                    }) => break,
-                    event::Event::Key(KeyEvent {
-                        code: KeyCode::Right,
-                        modifiers: KeyModifiers::NONE,
-                    }) if self.highlighted_move.1 > 1 => {
-                        self.highlighted_move.1 -= 1;
-                        true
-                    }
-                    event::Event::Key(KeyEvent {
-                        code: KeyCode::Left,
-                        modifiers: KeyModifiers::NONE,
-                    }) if self.highlighted_move.1 < self.game.rows[self.highlighted_move.0] => {
-                        self.highlighted_move.1 += 1;
-                        true
-                    }
-                    event::Event::Key(KeyEvent {
-                        code: KeyCode::Down,
-                        modifiers: KeyModifiers::NONE,
-                    }) => {
-                        self.highlighted_move.0 =
-                            (self.highlighted_move.0 + 1) % self.game.rows.len();
-                        self.highlighted_move.1 = 1;
-                        true
-                    }
-                    event::Event::Key(KeyEvent {
-                        code: KeyCode::Up,
-                        modifiers: KeyModifiers::NONE,
-                    }) => {
-                        if self.highlighted_move.0 == 0 {
-                            self.highlighted_move.0 = (self.game.rows.len() - 1).into();
-                        } else {
-                            self.highlighted_move.0 -= 1;
+                if let Event::Key(KeyEvent { code: key, .. }) = event::read().unwrap() {
+                    if match key {
+                        KeyCode::Esc => return None,
+                        KeyCode::Left => {
+                            self.move_selection_left(game);
+                            true
                         }
-                        self.highlighted_move.1 = 1;
-                        true
+                        KeyCode::Right => {
+                            self.move_selection_right();
+                            true
+                        }
+                        KeyCode::Up => {
+                            self.move_selection_up(game);
+                            true
+                        }
+                        KeyCode::Down => {
+                            self.move_selection_down(game);
+                            true
+                        }
+                        KeyCode::Enter => return Some(self.highlighted_move),
+                        _ => false,
+                    } {
+                        self.display(game, true);
                     }
-                    event::Event::Key(KeyEvent {
-                        code: KeyCode::Enter,
-                        modifiers: KeyModifiers::NONE,
-                    }) => {
-                        self.game.apply_move(self.highlighted_move);
-                        self.last_move = Some(self.highlighted_move);
-                        self.highlighted_move = self
-                            .game
-                            .rows
-                            .iter()
-                            .enumerate()
-                            .find_map(|(i, &x)| if x > 0 { Some((i,1)) } else { None })
-                            .unwrap();
-                        true
-                    }
-                    _ => false,
                 };
-                if changed {
-                    self.display();
-                }
             }
         }
     }
 
-    fn new() -> Self {
-        let g = NimGame::new(vec![1, 3, 5, 7]);
+    fn move_selection_up(&mut self, game: &NimGame) {
+        loop {
+            if self.highlighted_move.0 == 0 {
+                self.highlighted_move.0 = game.rows.len() - 1;
+            } else {
+                self.highlighted_move.0 -= 1;
+            }
 
+            self.highlighted_move.1 = 1;
+
+            if game.rows[self.highlighted_move.0] != 0 {
+                break;
+            }
+        }
+    }
+
+    fn move_selection_down(&mut self, game: &NimGame) {
+        loop {
+            if self.highlighted_move.0 == game.rows.len() - 1 {
+                self.highlighted_move.0 = 0;
+            } else {
+                self.highlighted_move.0 += 1;
+            }
+
+            self.highlighted_move.1 = 1;
+
+            if game.rows[self.highlighted_move.0] != 0 {
+                break;
+            }
+        }
+    }
+
+    fn move_selection_right(&mut self) {
+        if self.highlighted_move.1 > 1 {
+            self.highlighted_move.1 -= 1;
+        }
+    }
+
+    fn move_selection_left(&mut self, game: &NimGame) {
+        if self.highlighted_move.1 < game.rows[self.highlighted_move.0] {
+            self.highlighted_move.1 += 1;
+        }
+    }
+
+    fn new(g: &NimGame) -> GameDisplay {
         let &largest_row = g.initial.iter().max().unwrap();
 
         GameDisplay {
-            game: g,
             width: largest_row.into(),
             last_move: None,
             highlighted_move: (0, 1),
+        }
+    }
+}
+
+impl PlayerType {
+    fn get_move(&self, display: &mut GameDisplay, game: &NimGame) -> Option<Move> {
+        match self {
+            PlayerType::Human(_) => display.get_user_move(game),
+            PlayerType::Computer => Some(game.auto_move()),
+        }
+    }
+
+    fn apply_move(&self, display: &mut GameDisplay, game: &mut NimGame) -> Option<bool> {
+        if let Some(m) = self.get_move(display, game) {
+            game.apply_move(m);
+            display.last_move = Some(m);
+            Some(game.check_lose())
+        } else {
+            None
         }
     }
 }
@@ -187,5 +206,29 @@ fn main() {
     terminal::enable_raw_mode().unwrap();
     execute!(stdout(), EnterAlternateScreen, cursor::Hide).unwrap();
 
-    GameDisplay::new().update_loop();
+    let mut g = NimGame::new(vec![1, 3, 5, 7]);
+    let mut display = GameDisplay::new(&g);
+
+    let players = [PlayerType::Computer, PlayerType::Human("Human".into())];
+
+    let winner = loop {
+        match players[0].apply_move(&mut display, &mut g) {
+            Some(true) => break Some(&players[0]),
+            None => break None,
+            _ => {}
+        }
+        match players[1].apply_move(&mut display, &mut g) {
+            Some(true) => break Some(&players[1]),
+            None => break None,
+            _ => {}
+        }
+    };
+
+    display.display(&g, false);
+
+    if let Some(winner) = winner {
+        println!("{} has won!", winner);
+    } else {
+        println!("Aborting.");
+    }
 }
